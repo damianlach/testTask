@@ -38,8 +38,17 @@ class CSVImportService
      */
     public $missingFieldsRaport = [];
 
+    /**
+     * @var array|null Generates a report on errors related to loading a CSV file
+     */
+    public array|null $exelErrrorsRaport = null;
 
-    public function __construct(private bool $testMode, private bool $showMFR)
+    /**
+     * @param bool $testMode test mode - run scripts without modified database
+     * @param bool $showMFR show missing fields raport
+     * @param array $headers names for columns
+     */
+    public function __construct(private bool $testMode, private bool $showMFR, private array $headers)
     {
     }
 
@@ -54,11 +63,18 @@ class CSVImportService
         $spreadsheet = IOFactory::load($filePath);
         $worksheet = $spreadsheet->getActiveSheet();
         $data = $worksheet->toArray();
-        $headers = array_shift($data);
+        $headersFromCSV = array_shift($data);
+        $this->headerFieldsValidation($headersFromCSV);
+
+        if ($this->exelErrrorsRaport) {
+            return [
+                'exelErrrorsRaport' => $this->exelErrrorsRaport
+            ];
+        }
 
         foreach ($data as $row) {
             $this->countAllItems++;
-            $productData = array_combine($headers, $row);
+            $productData = array_combine($headersFromCSV, $row);
             $productDataDTO = new ProductDataDTO($productData);
 
             if ($productDataDTO->hasMissingFields()) {
@@ -82,9 +98,23 @@ class CSVImportService
             'countAllItems' => $this->countAllItems,
             'countSuccessImport' => $this->countSuccessImport,
             'reportFailItems' => $this->reportFailItems,
-            'missingFieldsRaport' => $this->missingFieldsRaport,
+            'missingFieldsRaport' => $this->missingFieldsRaport
         ];
+    }
 
+    /**
+     * Header fields validation - check if we have all necessary field
+     *
+     * @param array $headersFromCSV - headers from CSV file
+     * @return void
+     */
+    private function headerFieldsValidation(array $headersFromCSV)
+    {
+        foreach ($this->headers as $key => $field) {
+            if ($headersFromCSV[$key] != $field) {
+                $this->exelErrrorsRaport['missing_headers'][] = $field;
+            }
+        }
     }
 
     /**
@@ -111,7 +141,6 @@ class CSVImportService
         } else {
             DB::commit(); // We approve the transaction
         }
-
     }
 
 }

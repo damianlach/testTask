@@ -23,13 +23,14 @@ class ProductDataDTO
      */
     public function __construct(array $productData)
     {
-        // Field Mapping with Validation
-        $this->strProductName = $this->getField($productData, 'Product Name');
-        $this->strProductDesc = $this->getField($productData, 'Product Description');
-        $this->strProductCode = $this->getField($productData, 'Product Code');
-        $this->intStock = $this->getField($productData, 'Stock', true);
-        $this->decCostInGBP = $this->getField($productData, 'Cost in GBP', true);
-        $this->dtmDiscontinued = (isset($productData['Discontinued']) && $productData['Discontinued'] === 'yes') ? Carbon::now() : null;
+        $headers = array_keys($productData);
+
+        $this->strProductCode = $this->getField($productData, $headers[0]);  // def. Product Code
+        $this->strProductName = $this->getField($productData, $headers[1]); // def. Product Name
+        $this->strProductDesc = $this->getField($productData, $headers[2]); // def. Product Description
+        $this->intStock = $this->getField($productData, $headers[3], true); // def. Stock
+        $this->decCostInGBP = $this->getField($productData, $headers[4], true); // def. Cost in GBP
+        $this->dtmDiscontinued = (isset($productData[$headers[5]]) && $productData[$headers[5]] === 'yes') ? Carbon::now() : null; // Discontinued
     }
 
     /**
@@ -42,12 +43,13 @@ class ProductDataDTO
      */
     private function getField(array $data, string $field, bool $isNumeric = false)
     {
+        $ProductCode = array_key_first($data);
         if (!isset($data[$field])) {
-            $this->missingFields[$data['Product Code']]['missing fields'][] = $field;
+            $this->missingFields[$ProductCode]['missing fields'][] = $field;
 
             return $isNumeric ? 0 : '';  // You can return a default value
         }
-        return $isNumeric ? $this->validateNumeric($data[$field], $data['Product Code'], $field) : $data[$field];
+        return $isNumeric ? $this->validateNumeric($data[$field], $ProductCode, $field) : $data[$field];
     }
 
     /**

@@ -8,9 +8,19 @@ use Maatwebsite\Excel\Excel;
 
 class ImportCsvCommand extends Command
 {
-    protected $signature = 'import:csv {path : Path to CSV file} {--test : Starting in test mode} {--missingFieldsRaport : show problems during process data }';
+    protected $signature = 'import:csv  {path : Path to CSV file}
+                                        {changeHeaders? : Enter 6 headers after commas that will replace the default ones (No spaces) }
+                                        {--test : Starting in test mode}
+                                        {--missingFieldsRaport : show problems during process data }
+                                        ';
+
 
     protected $description = 'Import CSV file into the database';
+
+    /**
+     * @var string[] default names for columns in CSV file
+     */
+    private $headers = ['Product Code', 'Product Name', 'Product Description', 'Stock', 'Cost in GBP', 'Discontinued'];
 
     /**
      * Wykonanie polecenia
@@ -18,11 +28,21 @@ class ImportCsvCommand extends Command
     public function handle()
     {
         $filePath = $this->argument('path');
+        $changeHeaders = $this->argument('changeHeaders') ;
         $testMode = $this->option('test');
         $showMFR = $this->option('missingFieldsRaport');
 
-        $csvImportService = new CSVImportService($testMode, $showMFR);
+        if($changeHeaders){
+            $this->headers = explode(',', $changeHeaders); // overwriteHeaders
+        }
+
+        $csvImportService = new CSVImportService($testMode, $showMFR, $this->headers);
         $result = $csvImportService->importCSV($filePath);
+
+        if (isset($result['exelErrrorsRaport'])) {
+            $this->printErrorRepor($result['exelErrrorsRaport']);
+            die();
+        }
         $countFailedImport = (int)$result['countAllItems'] - (int)$result['countSuccessImport'];
 
         $this->info('======= RESULTS =======');
@@ -34,8 +54,9 @@ class ImportCsvCommand extends Command
 
         $this->info('====== End reports ======');
         $this->info('All unsaved records data:');
+
         $this->table(
-            ['Product Name', 'Product Desc', 'Product Code', 'Stock', 'Cost In GBP', 'Discontinued'],
+            $this->headers,
             $result['reportFailItems']
         );
 
@@ -49,10 +70,28 @@ class ImportCsvCommand extends Command
     }
 
     /**
+     * View report content
+     *
+     * @param array $result
+     * @return void
+     */
+    private function printErrorRepor(array $result)
+    {
+        $this->error('======== Errors ========');
+        $this->error('Missing headers:');
+
+        if (isset($result['missing_headers'])) {
+            foreach ($result['missing_headers'] as $error) {
+                $this->error('- ' . $error);   // "Missing required field:
+            }
+        }
+    }
+
+    /**
      * Generate missing fields raport table
      * @return void
      */
-    private function generateTable($data) : void
+    private function generateTable($data): void
     {
         if (!empty($data)) {
             foreach ($data as $item) {
